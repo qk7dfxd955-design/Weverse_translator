@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weverse 即時翻譯</title>
+
+<!-- PWA manifest -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+
+<style>
+  body{
+    margin:0;
+    padding:8px;
+    background: rgba(0,0,0,0.85);
+    color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont;
+  }
+  button{
+    width:100%;
+    padding:8px;
+    font-size:14px;
+    border-radius:10px;
+    border:none;
+    background:#00e676;
+    color:#000;
+    font-weight:600;
+    margin-bottom:6px;
+  }
+  #sub{
+    font-size:13px;
+    line-height:1.45;
+    white-space:pre-wrap;
+    opacity:0.95;
+  }
+</style>
+</head>
+<body>
+
+<button onclick="start()">▶ 開始翻譯</button>
+<div id="sub">等待藝人說話中…</div>
+
+<script>
+// Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+
+// 即時語音辨識
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const rec = new SR();
+rec.continuous = true;
+rec.lang = "ko-KR";
+
+let lastText = "";
+let lastTime = 0;
+
+// 過濾音樂或重複文字
+function looksLikeMusic(text){
+  if(text.length < 6) return true;
+  const unique = new Set(text.split(""));
+  if(unique.size / text.length < 0.5) return true;
+  if(text === lastText) return true;
+  return false;
+}
+
+// 翻譯
+async function translate(t){
+  const r = await fetch(
+    "https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=zh-TW&dt=t&q="
+    + encodeURIComponent(t)
+  );
+  const j = await r.json();
+  return j[0][0][0];
+}
+
+// 辨識結果處理
+rec.onresult = async (e)=>{
+  const t = e.results[e.results.length-1][0].transcript.trim();
+  if(looksLikeMusic(t)) return;
+  const now = Date.now();
+  if(now - lastTime < 1200) return;
+  lastText = t;
+  lastTime = now;
+  const zh = await translate(t);
+  document.getElementById("sub").innerText =
+    "🇰🇷 " + t + "\n🇹🇼 " + zh;
+};
+
+function start(){ rec.start(); }
+</script>
+
+</body>
+</html>
